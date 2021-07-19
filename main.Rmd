@@ -1,0 +1,103 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+# Practical Machine Learning - Prediction Assignment
+
+
+```{r warning=FALSE}
+library(e1071)
+library(lattice)
+library(ggplot2)
+library(foreach)
+library(iterators)
+library(parallel)
+library(caret)
+library(doParallel)
+```
+
+## Downloading Training Set
+```{r warning=FALSE}
+pml_training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+dest <- "pml-training.csv"
+if (!file.exists(dest))download.file(pml_training,dest)
+training_set <- read.csv(dest, row.names = 1)
+```
+
+## Downloading Final Testing Set
+```{r warning=FALSE}
+pml_testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+dest <- "pml_testing.csv"
+if (!file.exists(dest))download.file(pml_testing,dest)
+testing_set <- read.csv(dest, row.names = 1)
+```
+
+## Cleanning data
+```{r warning=FALSE}
+#Remove columns with more than 95% of NA or "" values
+treshold <- dim(training_set)[1] * 0.95
+goodColumns <- !apply(training_set, 2, function(x) sum(is.na(x)) > treshold  || sum(x=="") > treshold)
+training_set <- training_set[, goodColumns]
+badColumns <- nearZeroVar(training_set, saveMetrics = TRUE)
+training_set <- training_set[, badColumns$nzv==FALSE]
+training_set$classe = factor(training_set$classe)
+
+testing_set <- testing_set[, goodColumns]
+testing_set <- testing_set[, badColumns$nzv==FALSE]
+testing_set$classe <- NA
+```
+
+## Making the trainning and crossvalidation dataset
+```{r warning=FALSE}
+inTrain <- createDataPartition(training_set$classe, p = 0.7, list=FALSE)
+crossv <- training_set[-inTrain,]
+training <- training_set[ inTrain,]
+```
+
+
+## Model 01 - Trees
+```{r warning=FALSE}
+ptm <- proc.time()
+mod1 <- train(classe ~., method="rpart", data=training)
+proc.time() - ptm
+pred1 <- predict(mod1, crossv)
+confusionMatrix(pred1, crossv$classe)
+```
+
+## Model 02 - Random Florest
+```{r warning=FALSE}
+ptm <- proc.time()
+mod2 <- train(classe ~ ., method="rf", data=training)
+proc.time() - ptm
+pred2 <- predict(mod2, crossv)
+confusionMatrix(pred2, crossv$classe)
+```
+
+## Model 03 - GBM
+```{r warning=FALSE}
+ptm <- proc.time()
+mod3 <- train(classe ~ ., method="gbm", data=training)
+proc.time() - ptm
+pred3 <- predict(mod3, crossv)
+confusionMatrix(pred3, crossv$classe)
+```
+
+## Model 04 - LDA
+```{r warning=FALSE}
+ptm <- proc.time()
+mod4 <- train(classe ~ ., data=training, method="lda")
+proc.time() - ptm
+pred4 <- predict(mod4, crossv)
+confusionMatrix(pred4, crossv$classe)
+```
+## Conclusion
+After 4 models, the chosen model was RF with 99,92% accuracy.
+
+## QUIZ Answer using RF
+```{r warning=FALSE}
+finalpred <- predict(mod2, testing_set)
+finalpred
+```
+
